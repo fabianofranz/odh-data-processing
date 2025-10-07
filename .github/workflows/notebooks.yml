@@ -1,0 +1,55 @@
+name: Smoke Tests for Notebooks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "notebooks/**/*.ipynb"
+      - ".github/workflows/notebooks.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "notebooks/**/*.ipynb"
+      - ".github/workflows/notebooks.yml"
+
+permissions:
+  contents: read
+
+env:
+  TESTING_PIP_DEPENDENCIES: "papermill nbformat ipykernel"
+
+jobs:
+  smoke_tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Set the notebooks to validate and run 
+        notebooks_to_validate: ["notebooks/**/*.ipynb"]
+        notebooks_to_run: ["notebooks/use-cases/document-conversion-standard.ipynb"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Testing Tools
+        run: |
+          pip install ${{ env.TESTING_PIP_DEPENDENCIES }}
+          ipython kernel install --name "python3" --user
+
+      - name: Validate Notebooks
+        run: |
+          set -ux
+
+          for file in ${{ matrix.notebooks_to_validate }}; do
+            if [ -f "$file" ]; then
+              echo "Validating notebook '$file'..."
+              python -c "import nbformat; nb = nbformat.read('$file', nbformat.NO_CONVERT); nbformat.validate(nb)"
+            fi
+          done
+
+      - name: Run Notebooks
+        run: papermill ${{ matrix.notebooks_to_run }} ${{ matrix.notebooks_to_run }}.tmp
